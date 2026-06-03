@@ -275,25 +275,57 @@
   through,
   /// Endpoint. -> array
   end,
+  /// Optional cubic control point leaving `start`. This constrains the open
+  /// Hobby solve's endpoint tangent and remains the first cubic control point.
+  /// -> none | array
+  start-control: none,
+  /// Optional cubic control point entering `end`. This constrains the open
+  /// Hobby solve's endpoint tangent and remains the last cubic control point.
+  /// -> none | array
+  end-control: none,
   /// Hobby curl/tension parameter. -> float
   omega: 1.0,
   /// Geometry approximation accuracy passed to the Rust geometry engine. -> float
   accuracy: 0.001,
 ) = {
-  _impl.hobby-through(start, through, end, omega: omega, accuracy: accuracy)
+  _impl.hobby-through(
+    start,
+    through,
+    end,
+    start-control: start-control,
+    end-control: end-control,
+    omega: omega,
+    accuracy: accuracy,
+  )
 }
 
 /// Construct a Hobby spline through an arbitrary point sequence.
 /// -> dictionary
 #let hobby-spline(
-  /// Two or more points for the open spline to pass through. -> array
+  /// Two or more points for the open spline to pass through. Each entry may
+  /// be a point or `(point: (x, y), tangent: (dx, dy))` to constrain the
+  /// tangent at that through point. -> array
   points,
+  /// Optional cubic control point leaving the first point. This constrains the
+  /// open Hobby solve's endpoint tangent and remains the first cubic control
+  /// point. -> none | array
+  start-control: none,
+  /// Optional cubic control point entering the last point. This constrains the
+  /// open Hobby solve's endpoint tangent and remains the last cubic control
+  /// point. -> none | array
+  end-control: none,
   /// Hobby curl/tension parameter. -> float
   omega: 1.0,
   /// Geometry approximation accuracy passed to the Rust geometry engine. -> float
   accuracy: 0.001,
 ) = {
-  _impl.hobby-spline(points, omega: omega, accuracy: accuracy)
+  _impl.hobby-spline(
+    points,
+    start-control: start-control,
+    end-control: end-control,
+    omega: omega,
+    accuracy: accuracy,
+  )
 }
 
 /// Apply a repeated path pattern to a base path.
@@ -428,10 +460,18 @@
 /// Split a path through a point sequence into per-span paths.
 /// -> dictionary
 #let split-through(
-  /// Two or more points for the curve to pass through. -> array
+  /// Two or more points for the curve to pass through. Each entry may be a
+  /// point or `(point: (x, y), tangent: (dx, dy))` to constrain the tangent
+  /// at that through point. -> array
   points,
   /// Hobby curl/tension parameter. -> float
   omega: 1.0,
+  /// Optional cubic control point leaving the first point. This is separate
+  /// from the through-point list and constrains the endpoint tangent. -> none | array
+  start-control: none,
+  /// Optional cubic control point entering the last point. This is separate
+  /// from the through-point list and constrains the endpoint tangent. -> none | array
+  end-control: none,
   /// Arc length removed from the first span start. -> int | float
   start-outset: 0,
   /// Arc length removed from the last span end. -> int | float
@@ -442,6 +482,8 @@
   _impl.split-through(
     points,
     omega: omega,
+    start-control: start-control,
+    end-control: end-control,
     start-outset: start-outset,
     end-outset: end-outset,
     accuracy: accuracy,

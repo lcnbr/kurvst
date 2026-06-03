@@ -632,11 +632,21 @@
 /// ```
 ///
 /// -> dictionary
-#let hobby-through(start, through, end, omega: 1.0, accuracy: 0.001) = {
+#let hobby-through(
+  start,
+  through,
+  end,
+  start-control: none,
+  end-control: none,
+  omega: 1.0,
+  accuracy: 0.001,
+) = {
   cbor(_plugin.curve_hobby_through(cbor.encode((
     start: start,
     through: through,
     end: end,
+    start-control: start-control,
+    end-control: end-control,
     omega: omega,
     accuracy: accuracy,
   ))))
@@ -664,9 +674,11 @@
 /// ```
 ///
 /// -> dictionary
-#let hobby-spline(points, omega: 1.0, accuracy: 0.001) = {
+#let hobby-spline(points, start-control: none, end-control: none, omega: 1.0, accuracy: 0.001) = {
   cbor(_plugin.curve_hobby_spline(cbor.encode((
     points: points,
+    start-control: start-control,
+    end-control: end-control,
     omega: omega,
     accuracy: accuracy,
   ))))
@@ -988,12 +1000,26 @@
 /// ```
 ///
 /// -> dictionary
-#let split-through(points, omega: 1.0, start-outset: 0, end-outset: 0, accuracy: 0.001) = {
+#let split-through(
+  points,
+  omega: 1.0,
+  start-control: none,
+  end-control: none,
+  start-outset: 0,
+  end-outset: 0,
+  accuracy: 0.001,
+) = {
   if points.len() < 2 {
     panic("split-through expects at least two points")
   }
 
-  let curve = hobby-spline(points, omega: omega, accuracy: accuracy)
+  let curve = hobby-spline(
+    points,
+    start-control: start-control,
+    end-control: end-control,
+    omega: omega,
+    accuracy: accuracy,
+  )
   let split-segments = segments(curve)
   let parts = ()
   let last-index = split-segments.len() - 1
