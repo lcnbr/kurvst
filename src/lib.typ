@@ -37,7 +37,10 @@
   /// Horizontal scale of the coil before it is mapped onto a path. -> int | float
   longitudinal-scale: 1.25,
 ) = {
-  _impl.coil(samples-per-period: samples-per-period, longitudinal-scale: longitudinal-scale)
+  _impl.coil(
+    samples-per-period: samples-per-period,
+    longitudinal-scale: longitudinal-scale,
+  )
 }
 
 /// Return `from` moved toward `toward` by `distance`.
@@ -212,6 +215,17 @@
   accuracy: 0.001,
 ) = _impl.length(path, accuracy: accuracy)
 
+/// Find transverse crossings between two paths, sorted by arc distance along the first path.
+/// -> array
+#let intersections(
+  /// First Kurvst path dictionary. -> dictionary
+  a,
+  /// Second Kurvst path dictionary. -> dictionary
+  b,
+  /// Absolute geometry and arc-length tolerance. -> float
+  accuracy: 0.001,
+) = _impl.intersections(a, b, accuracy: accuracy)
+
 /// Resolve a fixed and relative visible path length.
 /// -> none | int | float
 #let resolve-length(
@@ -224,7 +238,12 @@
   /// Resolution strategy for fixed and relative targets. -> string | function
   method: "min",
 ) = {
-  _impl.resolve-length(base-length, length: length, ratio: ratio, method: method)
+  _impl.resolve-length(
+    base-length,
+    length: length,
+    ratio: ratio,
+    method: method,
+  )
 }
 
 /// Compute the symmetric trim needed to center a shorter path layer.
@@ -263,7 +282,12 @@
   /// Arc-length approximation accuracy passed to the Rust geometry engine. -> float
   accuracy: 0.001,
 ) = {
-  _impl.trim(path, start-outset: start-outset, end-outset: end-outset, accuracy: accuracy)
+  _impl.trim(
+    path,
+    start-outset: start-outset,
+    end-outset: end-outset,
+    accuracy: accuracy,
+  )
 }
 
 /// Construct a cubic Hobby path through three points.
@@ -275,57 +299,25 @@
   through,
   /// Endpoint. -> array
   end,
-  /// Optional cubic control point leaving `start`. This constrains the open
-  /// Hobby solve's endpoint tangent and remains the first cubic control point.
-  /// -> none | array
-  start-control: none,
-  /// Optional cubic control point entering `end`. This constrains the open
-  /// Hobby solve's endpoint tangent and remains the last cubic control point.
-  /// -> none | array
-  end-control: none,
   /// Hobby curl/tension parameter. -> float
   omega: 1.0,
   /// Geometry approximation accuracy passed to the Rust geometry engine. -> float
   accuracy: 0.001,
 ) = {
-  _impl.hobby-through(
-    start,
-    through,
-    end,
-    start-control: start-control,
-    end-control: end-control,
-    omega: omega,
-    accuracy: accuracy,
-  )
+  _impl.hobby-through(start, through, end, omega: omega, accuracy: accuracy)
 }
 
 /// Construct a Hobby spline through an arbitrary point sequence.
 /// -> dictionary
 #let hobby-spline(
-  /// Two or more points for the open spline to pass through. Each entry may
-  /// be a point or `(point: (x, y), tangent: (dx, dy))` to constrain the
-  /// tangent at that through point. -> array
+  /// Two or more points for the open spline to pass through. -> array
   points,
-  /// Optional cubic control point leaving the first point. This constrains the
-  /// open Hobby solve's endpoint tangent and remains the first cubic control
-  /// point. -> none | array
-  start-control: none,
-  /// Optional cubic control point entering the last point. This constrains the
-  /// open Hobby solve's endpoint tangent and remains the last cubic control
-  /// point. -> none | array
-  end-control: none,
   /// Hobby curl/tension parameter. -> float
   omega: 1.0,
   /// Geometry approximation accuracy passed to the Rust geometry engine. -> float
   accuracy: 0.001,
 ) = {
-  _impl.hobby-spline(
-    points,
-    start-control: start-control,
-    end-control: end-control,
-    omega: omega,
-    accuracy: accuracy,
-  )
+  _impl.hobby-spline(points, omega: omega, accuracy: accuracy)
 }
 
 /// Apply a repeated path pattern to a base path.
@@ -403,6 +395,8 @@
   ratio: none,
   /// Resolution strategy for fixed and relative targets. -> string | function
   resolve-length: "min",
+  /// Arc-length displacement of a shortened layer; positive moves toward the path end. -> int | float
+  shift: 0,
   /// Arc length removed from the start. -> int | float
   start-outset: 0,
   /// Arc length removed from the end. -> int | float
@@ -419,6 +413,7 @@
   length: length,
   ratio: ratio,
   resolve-length: resolve-length,
+  shift: shift,
   start-outset: start-outset,
   end-outset: end-outset,
   side-point: side-point,
@@ -460,18 +455,10 @@
 /// Split a path through a point sequence into per-span paths.
 /// -> dictionary
 #let split-through(
-  /// Two or more points for the curve to pass through. Each entry may be a
-  /// point or `(point: (x, y), tangent: (dx, dy))` to constrain the tangent
-  /// at that through point. -> array
+  /// Two or more points for the curve to pass through. -> array
   points,
   /// Hobby curl/tension parameter. -> float
   omega: 1.0,
-  /// Optional cubic control point leaving the first point. This is separate
-  /// from the through-point list and constrains the endpoint tangent. -> none | array
-  start-control: none,
-  /// Optional cubic control point entering the last point. This is separate
-  /// from the through-point list and constrains the endpoint tangent. -> none | array
-  end-control: none,
   /// Arc length removed from the first span start. -> int | float
   start-outset: 0,
   /// Arc length removed from the last span end. -> int | float
@@ -482,8 +469,6 @@
   _impl.split-through(
     points,
     omega: omega,
-    start-control: start-control,
-    end-control: end-control,
     start-outset: start-outset,
     end-outset: end-outset,
     accuracy: accuracy,
