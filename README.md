@@ -1,29 +1,13 @@
-# kurvst
+# Kurvst
 
-`kurvst` is a Typst package backed by a small Kurbo WebAssembly plugin. It
-provides Bezier splitting, arc-length trimming, Hobby-style edge curves,
-parallel paths, and one-dimensional path patterns that can be emitted as CeTZ
-drawing commands.
+Kurvst is a Typst package backed by a Kurbo WebAssembly plugin for Bezier/Hobby curves,
+arc-length trimming, path patterns, parallel paths, and CeTZ conversion. It requires Typst
+0.15.0 or newer.
 
-```typ
-#import "src/lib.typ" as kurvst
+The canonical API and usage manual is
+[`docs/manual.typ`](docs/manual.typ), published in the GammaLoop documentation as the
+[Kurvst curve and path guide](https://alphal00p.github.io/gammaloop/products/gammaloop/latest/guides/kurvst/). Compile-checked
+drawings live under [`examples/`](examples/).
 
-#let segment = (
-  start: (x: 0, y: 0),
-  ctrl-a: (x: 1, y: 0.5),
-  ctrl-b: (x: 2, y: -0.5),
-  end: (x: 3, y: 0),
-)
-
-#let base = kurvst.cubic-path(..segment)
-#let path = kurvst.pattern-path(
-  base,
-  pattern: kurvst.coil(longitudinal-scale: 1.6),
-  amplitude: 0.15,
-  wavelength: 0.7,
-)
-
-#let parallel = kurvst.parallel-path(base, distance: 0.18)
-```
-
-See `docs/manual.typ` for the full API manual.
+Contributor policy is in GammaLoop's
+[`CONTRIBUTING.typ`](https://github.com/alphal00p/gammaloop/blob/main/CONTRIBUTING.typ).
