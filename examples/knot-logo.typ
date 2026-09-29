@@ -3,12 +3,8 @@
 
 #set page(width: auto, height: auto, margin: 10mm, fill: none)
 
-// The GammaLoop logo on page 1; `fill` recolours it. Regenerate the assets from
-// the repository root with
-//   typst compile --root crates/kurvst/typst --pages 1 --input fill=#3d2645 \
-//     crates/kurvst/typst/examples/knot-logo.typ assets/gammalooplogo-light.svg
-// and `--input fill=#f8effa` for assets/gammalooplogo-dark.svg.
-#let fill = rgb(sys.inputs.at("fill", default: "#000000"))
+// The GammaLoop logo (page 1) and its construction (page 2). The website marks
+// in docs/assets/typst/marks import `logo` and `construction` from this file.
 
 // Letter stroke width and the gap cut on each side of an over-crossing stroke,
 // in canvas units.
@@ -79,7 +75,8 @@
   ..style,
 )
 
-#cetz.canvas(length: 15mm, cetz.draw.boolean(
+// The logo: every letter outline, minus the strips around the over stroke.
+#let logo(fill) = cetz.canvas(length: 15mm, cetz.draw.boolean(
   letters,
   strips(),
   op: "difference",
@@ -87,17 +84,24 @@
   stroke: none,
 ))
 
-// Debug view: every operand of the boolean operations above. Letter outlines
-// are translucent so overlaps show, the cut strips are red, and centerlines are
-// dashed.
-#pagebreak()
-#let palette = (blue, orange, green, purple)
-#cetz.canvas(length: 15mm, {
-  for (piece, color) in pieces.zip(palette) {
-    solid(piece.outline, fill: color.transparentize(70%), stroke: color + 0.6pt)
+// Every operand of the boolean operations above. Letter outlines are
+// translucent (by `tint`) so overlaps show, the cut strips are `cut`, and
+// centerlines are dashed `line` strokes.
+#let construction(
+  colors: (blue, orange, green, purple),
+  cut: red,
+  line: black,
+  tint: 70%,
+) = cetz.canvas(length: 15mm, {
+  for (piece, color) in pieces.zip(colors) {
+    solid(piece.outline, fill: color.transparentize(tint), stroke: color + 0.6pt)
   }
-  strips(fill: red.transparentize(40%), stroke: red + 0.6pt)
+  strips(fill: cut.transparentize(40%), stroke: cut + 0.6pt)
   for piece in pieces {
-    kurvst.to-cetz(piece.centerline, stroke: (paint: black, thickness: 0.4pt, dash: "dashed"))
+    kurvst.to-cetz(piece.centerline, stroke: (paint: line, thickness: 0.4pt, dash: "dashed"))
   }
 })
+
+#logo(black)
+#pagebreak()
+#construction()
