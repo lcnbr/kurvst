@@ -184,7 +184,8 @@
   if distance == 0 or length == 0 {
     _point-pair(from)
   } else {
-    let applied = calc.min(distance, length * 0.45)
+    // A one-ended outset may use the full segment, especially for large nodes.
+    let applied = calc.min(distance, length)
     (
       _point-x(from) + dx / length * applied,
       _point-y(from) + dy / length * applied,
@@ -200,12 +201,7 @@
   }
 }
 
-// Treat points that differ only by floating-point noise as the same point.
-#let _same-point(a, b) = {
-  let ((ax, ay), (bx, by)) = (_point-pair(a), _point-pair(b))
-  let tolerance = 1e-9 * calc.max(1, calc.abs(ax), calc.abs(ay))
-  calc.abs(ax - bx) <= tolerance and calc.abs(ay - by) <= tolerance
-}
+#let _same-point(a, b) = _point-pair(a) == _point-pair(b)
 
 #let _origin = (0, 0)
 
@@ -348,9 +344,8 @@
 
 /// Return a path with additional fragments or elements appended.
 ///
-/// If an appended fragment starts with a `move` at the current endpoint (up to
-/// floating-point noise), the `move` is skipped. If it starts elsewhere, the
-/// `move` begins a new subpath.
+/// If an appended fragment starts with a `move` at the current endpoint, the
+/// `move` is skipped. If it starts elsewhere, the `move` begins a new subpath.
 ///
 /// -> dictionary
 #let append(path, ..parts) = from-elements(_append-elements(
@@ -375,38 +370,6 @@
   move-to(start),
   cubic-to(control-start, control-end, end),
 )
-
-/// Build a circular arc path fragment from cubic segments.
-///
-/// The arc runs from `start` to `stop` counterclockwise (in y-up coordinates)
-/// when `stop > start` and clockwise otherwise, split into pieces of at most 90°.
-///
-/// -> dictionary
-#let arc(center, radius, start, stop) = {
-  assert(radius > 0, message: "arc radius must be positive")
-  let (cx, cy) = _point-pair(center)
-  let direction(a) = (calc.cos(a), calc.sin(a))
-  let at(a) = {
-    let (dx, dy) = direction(a)
-    (cx + radius * dx, cy + radius * dy)
-  }
-  let pieces = calc.max(1, calc.ceil(calc.abs((stop - start) / 90deg)))
-  let step = (stop - start) / pieces
-  // Control-point distance for a cubic approximating a circular arc of `step`.
-  let k = 4 / 3 * calc.tan(step / 4) * radius
-  path(..range(pieces).map(i => {
-    let a0 = start + i * step
-    let a1 = a0 + step
-    let (p0, p3) = (at(a0), at(a1))
-    let (d0, d3) = (direction(a0), direction(a1))
-    cubic(
-      p0,
-      (p0.at(0) - k * d0.at(1), p0.at(1) + k * d0.at(0)),
-      (p3.at(0) + k * d3.at(1), p3.at(1) - k * d3.at(0)),
-      p3,
-    )
-  }))
-}
 
 /// Build a path fragment from a cubic segment dictionary.
 ///
@@ -821,9 +784,7 @@
 /// or a point pattern:
 /// `(kind: "points", interpolation: "linear" or "smooth", points: ((at: 0, x: 0, y: 0), ...))`.
 /// The whole input path is sampled continuously, so pattern phase does not
-/// restart at cubic segment boundaries. `split-at` lists arc distances along
-/// the input path; the result's `parts` holds the one patterned path cut there,
-/// so pieces can be styled independently while following a single pattern.
+/// restart at cubic segment boundaries.
 ///
 /// ```example
 /// #let spline = kurvst.hobby-spline((
@@ -857,7 +818,6 @@
   anchor-end: true,
   endpoint-slope: 0,
   accuracy: 0.001,
-  split-at: (),
 ) = {
   let pattern = _resolve-pattern(
     pattern,
@@ -876,7 +836,6 @@
     anchor-end: anchor-end,
     endpoint-slope: endpoint-slope,
     accuracy: accuracy,
-    split-at: split-at.map(float),
   ))))
 }
 
@@ -916,34 +875,6 @@
     end-outset: end-outset,
     accuracy: accuracy,
     optimize: optimize,
-  ))))
-}
-
-/// Expand a stroked path into a closed outline that can be filled.
-///
-/// Uses Kurbo's stroker: each open subpath becomes one closed contour with
-/// joins at corners and caps at both ends; each closed subpath becomes an outer
-/// and an inner contour. Fill the result with the default non-zero rule.
-///
-/// -> dictionary
-#let outline(
-  path,
-  width: 0.1,
-  join: "miter",
-  miter-limit: 4,
-  cap: "butt",
-  start-cap: auto,
-  end-cap: auto,
-  accuracy: 0.001,
-) = {
-  cbor(_plugin.curve_stroke_outline(cbor.encode((
-    path: _path-value(path),
-    width: width,
-    join: join,
-    miter-limit: miter-limit,
-    start-cap: if start-cap == auto { cap } else { start-cap },
-    end-cap: if end-cap == auto { cap } else { end-cap },
-    accuracy: accuracy,
   ))))
 }
 
