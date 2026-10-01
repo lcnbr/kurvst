@@ -22,6 +22,7 @@
   hobby-through as _impl-hobby-through,
   intersections as _impl-intersections,
   layer as _impl-layer,
+  layers as _impl-layers,
   layer-defaults as _impl-layer-defaults,
   length as _impl-length,
   line as _impl-line,
@@ -51,8 +52,11 @@
 
 /// Sample points and tangent directions at arc distances, clamped to the path.
 /// Uses the same prefix trimming as trim; empty paths return none per sample.
-/// Tangents are not normalized. -> array
-#let frames(path, distances, accuracy: 0.001) = _impl-frames(path, distances, accuracy: accuracy)
+/// Tangents are not normalized. `format: "cbor"` retains the encoded records
+/// for transport to another native geometry operation. -> array | bytes
+#let frames(path, distances, accuracy: 0.001, format: "array") = _impl-frames(
+  path, distances, accuracy: accuracy, format: format,
+)
 
 /// Sample overlapping points in equal arc-length regions across cubic parts.
 /// Hidden parts contribute length but produce no points. Both endpoints of
@@ -423,6 +427,10 @@
   /// lateral offset is nonzero at its endpoint phase. This is not an angle.
   /// Ignored for unanchored ends and patterns without endpoint ramping, including fitted coils. -> int | float
   endpoint-slope: 0,
+  /// Carrier arc distances at which to split the finished pattern into parts.
+  /// Sorted and clamped to the carrier length; repeated cuts keep empty parts.
+  /// The full path is unchanged. -> array
+  split-at: (),
   /// Geometry approximation accuracy passed to the Rust geometry engine. -> float
   accuracy: 0.001,
 ) = _impl-pattern(
@@ -436,6 +444,7 @@
   anchor-start: anchor-start,
   anchor-end: anchor-end,
   endpoint-slope: endpoint-slope,
+  split-at: split-at,
   accuracy: accuracy,
 )
 
@@ -480,6 +489,8 @@
 }
 
 /// Build a derived visible path layer.
+/// Returns drawable geometry and `offset`, the resolved signed offset before
+/// trimming. Reuse that value to apply the same side choice to path fragments.
 /// -> dictionary
 #let layer(
   /// Base Kurvst path dictionary. -> dictionary
@@ -516,6 +527,48 @@
   side-point: side-point,
   accuracy: accuracy,
   optimize: optimize,
+)
+
+/// Build several shifted layers with one carrier preparation.
+/// Each result contains the normal layer `path` dictionary and its drawable
+/// cubic `segments`. Length resolution and offsetting match @layer.
+/// `format: "cbor"` returns encoded native layers and footprint paths with
+/// count, nonzero, supported, all-single and shared offset metadata. Native
+/// layer paths omit the shared offset field. `unit` affects footprint geometry
+/// only: single-segment Beziers retain unit 1, matching the drawing owner.
+/// -> array | dictionary
+#let layers(
+  /// Base Kurvst path dictionary. -> dictionary
+  path,
+  /// Arc-length displacements, clamped as in @layer. -> array
+  shifts,
+  /// Signed normal offset distance. -> int | float
+  offset: 0,
+  /// Fixed target visible length. -> none | int | float
+  length: none,
+  /// Relative target visible length. -> none | int | float
+  ratio: none,
+  /// Resolution strategy for fixed and relative targets. -> string | function
+  resolve-length: "min",
+  /// Arc length removed from the start. -> int | float
+  start-outset: 0,
+  /// Arc length removed from the end. -> int | float
+  end-outset: 0,
+  /// Optional point choosing the offset sign. -> none | array
+  side-point: none,
+  /// Geometry approximation accuracy. -> float
+  accuracy: 0.001,
+  /// Optimize fitted parallel paths. -> bool
+  optimize: true,
+  /// Return decoded layers or an opaque geometry packet. -> string
+  format: "array",
+  /// Numeric scale for multi-segment footprint paths. -> int | float
+  unit: 1,
+) = _impl-layers(
+  path, shifts, offset: offset, length: length, ratio: ratio,
+  resolve-length: resolve-length, start-outset: start-outset,
+  end-outset: end-outset, side-point: side-point, accuracy: accuracy,
+  optimize: optimize, format: format, unit: unit,
 )
 
 /// Emit a Kurvst path as native Typst `curve` content.

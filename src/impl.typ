@@ -130,37 +130,26 @@
     name: "coil",
     interpolation: "smooth",
     endpoint-ramp: true,
-    points: _sampled-pattern(
+    points: (),
+  )
+  if fit-length == none {
+    pattern.points = _sampled-pattern(
       samples-per-period,
       theta => (longitudinal-scale * calc.cos(theta), calc.sin(theta)),
-    ),
-  )
-  if fit-length == none { return pattern }
-  for (name, value) in (
-    ("fit-length", fit-length), ("amplitude", amplitude),
-    ("wavelength", wavelength), ("longitudinal-scale", longitudinal-scale),
-  ) {
-    assert(
-      type(value) in (int, float) and value == value and calc.abs(value) < calc.inf,
-      message: "coil: " + name + " must be finite",
     )
+    return pattern
   }
-  assert(fit-length > 0 and wavelength > 0, message: "coil: fit-length and wavelength must be positive")
-  assert(longitudinal-scale >= 0, message: "coil: fitted longitudinal-scale must be non-negative")
-  let span = fit-length + calc.abs(amplitude) * longitudinal-scale * 2
-  assert(span < calc.inf, message: "coil: fitted span must be finite")
-  // Removing half a turn preserves the visible-loop count of integer-fitted tapered coils.
-  let periods = calc.max(1, calc.round(fit-length / wavelength)) - 0.5
-  let samples = calc.max(2, int(calc.ceil(periods * calc.max(1, samples-per-period))))
-  let scale = longitudinal-scale * (fit-length / span) * if amplitude < 0 { -1 } else { 1 }
   pattern.endpoint-ramp = false
-  pattern.points = _sampled-pattern(samples, theta => {
-    let at = theta / (2 * calc.pi)
-    if at == 0 or at == 1 { return (0, 0) }
-    let phase = calc.pi + periods * theta
-    // Normalize offsets so the ordinary pattern API still applies amplitude once.
-    (scale * (1 + calc.cos(phase) - 2 * at), calc.sin(phase))
-  })
+  pattern.points = cbor(_plugin.curve_fitted_coil_points(cbor.encode((
+    kind: "fitted-coil", fit-length: fit-length, amplitude: amplitude,
+    wavelength: wavelength, longitudinal-scale: longitudinal-scale,
+    samples-per-period: calc.max(1, samples-per-period),
+  ))))
+  // Retain the public point dictionaries' integer endpoint coordinates.
+  pattern.points.at(0).x = 0
+  pattern.points.at(0).y = 0
+  pattern.points.at(-1).x = 0
+  pattern.points.at(-1).y = 0
   pattern
 }
 
@@ -590,9 +579,13 @@
 
 #let length(path, accuracy: 0.001) = _length(path, accuracy: accuracy)
 
-#let frames(path, distances, accuracy: 0.001) = cbor(_plugin.curve_path_frames(cbor.encode((
-  path: _path-value(path), distances: distances, accuracy: accuracy,
-))))
+#let frames(path, distances, accuracy: 0.001, format: "array") = {
+  assert(format in ("array", "cbor"), message: "Unknown frame format: " + repr(format))
+  let encoded = _plugin.curve_path_frames(cbor.encode((
+    path: _path-value(path), distances: distances, accuracy: accuracy,
+  )))
+  if format == "cbor" { encoded } else { cbor(encoded) }
+}
 
 /// Find transverse crossings between two paths.
 ///
@@ -795,6 +788,7 @@
   anchor-start: true,
   anchor-end: true,
   endpoint-slope: 0,
+  split-at: (),
   accuracy: 0.001,
 ) = {
   let pattern = _resolve-pattern(
@@ -813,6 +807,7 @@
     anchor-start: anchor-start,
     anchor-end: anchor-end,
     endpoint-slope: endpoint-slope,
+    split-at: split-at,
     accuracy: accuracy,
   )
 }
@@ -822,8 +817,12 @@
 /// `pattern` may be `wave()`, `zigzag()`, `coil()`, a compatible string name,
 /// or a point pattern:
 /// `(kind: "points", interpolation: "linear" or "smooth", points: ((at: 0, x: 0, y: 0), ...))`.
+/// A `kind: "fitted-coil"` dictionary accepts the fitting parameters of `coil()`
+/// and samples them natively; use outer wavelength `fit-length` and phase zero.
 /// The whole input path is sampled continuously, so pattern phase does not
 /// restart at cubic segment boundaries.
+/// With `split-at`, the returned `parts` divide the finished fitted pattern at
+/// carrier distances; cuts never re-fit, restart, or taper the pattern.
 ///
 /// ```example
 /// #let spline = kurvst.hobby-spline((
@@ -888,6 +887,65 @@
   ))))
 }
 
+// Prepare shifted windows together while retaining the scalar layer semantics.
+#let layers(
+  path,
+  shifts,
+  offset: 0,
+  length: none,
+  ratio: none,
+  resolve-length: "min",
+  start-outset: 0,
+  end-outset: 0,
+  side-point: none,
+  accuracy: 0.001,
+  optimize: true,
+  format: "array",
+  unit: 1,
+) = {
+  assert(format in ("array", "cbor"), message: "Unknown layer format: " + repr(format))
+  let distance = _offset-toward-side-point(path, offset, side-point)
+  if distance != none and distance != 0 {
+    path = parallel(
+      path,
+      distance: distance,
+      accuracy: accuracy,
+      optimize: optimize,
+    )
+  }
+  // Keep empty paths drawable; trim requires at least one segment.
+  if segments(path).len() == 0 {
+    let slices = shifts.map(_ => (path: (path: _path-value(path)), segments: ()))
+    return if format == "cbor" {
+      (layers: cbor.encode(slices), footprints: cbor.encode(()), count: shifts.len(),
+        nonzero: false, supported: false, all-single: false, offset: distance)
+    } else {
+      slices.map(slice => (path: slice.path + (offset: distance), segments: slice.segments))
+    }
+  }
+  let center-trim = center-outset(
+    _length(path, accuracy: accuracy),
+    length: length,
+    ratio: ratio,
+    resolve-length: resolve-length,
+    start-outset: start-outset,
+    end-outset: end-outset,
+  )
+  // Keep Typst's numeric types, signed zeros and left-to-right arithmetic.
+  // Only the shared geometric trimming and cubic conversion cross to native.
+  let outsets = shifts.map(shift => {
+    let shift = calc.max(-center-trim, calc.min(center-trim, shift))
+    (start-outset: start-outset + center-trim + shift,
+      end-outset: end-outset + center-trim - shift)
+  })
+  let slices = cbor(_plugin.curve_trim_paths(cbor.encode((
+    path: _path-value(path), outsets: outsets, accuracy: accuracy, format: format, unit: unit,
+  ))))
+  if format == "cbor" { slices + (offset: distance) } else {
+    slices.map(slice => (path: slice.path + (offset: distance), segments: slice.segments))
+  }
+}
+
 /// Build a derived visible path layer.
 ///
 /// `layer` combines the common operations needed by drawing packages:
@@ -898,6 +956,7 @@
 /// positive and is clamped at the endpoint outsets. The return value is a normal
 /// Kurvst path dictionary that can be passed to @pattern, @parallel,
 /// @trim, or @to-cetz.
+/// Its `offset` field records the signed offset resolved before trimming.
 ///
 /// ```example
 /// #let base = kurvst.hobby-spline((
@@ -933,36 +992,12 @@
   accuracy: 0.001,
   optimize: true,
 ) = {
-  let distance = _offset-toward-side-point(path, offset, side-point)
-  if distance != none and distance != 0 {
-    path = parallel(
-      path,
-      distance: distance,
-      accuracy: accuracy,
-      optimize: optimize,
-    )
-    // Parallel preserves empty paths, which trim would reject.
-    if segments(path).len() == 0 {
-      return path
-    }
-  }
-  let center-trim = center-outset(
-    _length(path, accuracy: accuracy),
-    length: length,
-    ratio: ratio,
-    resolve-length: resolve-length,
-    start-outset: start-outset,
-    end-outset: end-outset,
-  )
-  let shift = calc.max(-center-trim, calc.min(center-trim, shift))
-  let start-outset = start-outset + center-trim + shift
-  let end-outset = end-outset + center-trim - shift
-  trim(
-    path,
-    start-outset: start-outset,
-    end-outset: end-outset,
-    accuracy: accuracy,
-  )
+  layers(
+    path, (shift,), offset: offset, length: length, ratio: ratio,
+    resolve-length: resolve-length, start-outset: start-outset,
+    end-outset: end-outset, side-point: side-point, accuracy: accuracy,
+    optimize: optimize,
+  ).first().path
 }
 
 /// Emit a Kurvst path as native Typst `curve` content.
@@ -1088,13 +1123,38 @@
   segments.map(((kind, ..points)) => (kind, ..points.map(p => p.slice(0, 2)))),
 ))
 
+#let _cetz-carrier(subpaths, ctx) = {
+  let merged = none
+  for (origin, closed, joined) in subpaths {
+    let current = joined.last().last()
+    if closed and current != origin { joined.push(("l", origin)); current = origin }
+    ctx.prev.pt = current
+    let carrier = _cetz-apply-transform(ctx.transform,
+      _cetz-drawable-path(((origin, false, joined),)),
+    ).first()
+    // Join in canvas coordinates, just as merge-path joins primitive drawables.
+    // A singular transform can make distinct source endpoints coincide.
+    if merged == none { merged = carrier } else {
+      let (origin, closed, joined) = merged.segments.first()
+      let (next-origin, _, next-joined) = carrier.segments.first()
+      let end = if joined.len() == 0 { origin } else { joined.last().last() }
+      if next-origin != end { joined.push(("l", next-origin)) }
+      joined += next-joined
+      merged.segments = ((origin, closed, joined),)
+    }
+  }
+  (ctx: ctx, drawables: (merged,))
+}
+
 #let _draw-cetz(subpaths, style, numeric, pairs, ctx) = {
   // Numeric paths need no per-segment coordinate resolution, anchors or
-  // bounds. Keep CeTZ's primitive processing when user hooks or inherited
-  // marks can change those segments before the final merge.
+  // bounds. Keep primitive processing for hooks, inherited marks, empty paths
+  // and multi-subpath merges with explicit closing or disabled joining.
   let custom = (not numeric
     or ctx.debug
-    or subpaths.len() != 1 or subpaths.first().last().len() == 0
+    or subpaths.any(path => path.last().len() == 0)
+    or (subpaths.len() > 1 and (
+      not style.at("join", default: true) or style.at("close", default: false)))
     or (type(ctx.resolve-coordinate) == array and ctx.resolve-coordinate.len() > 0)
     or _cetz-check-mark(_cetz-resolve-style(ctx.style, root: "line").mark)
     or _cetz-check-mark(_cetz-resolve-style(ctx.style, root: "bezier").mark))
@@ -1118,15 +1178,7 @@
       }
     }
   } else {
-    let (origin, closed, joined) = subpaths.first()
-    let current = joined.last().last()
-    if closed and current != origin { joined.push(("l", origin)); current = origin }
-    (ctx => {
-      ctx.prev.pt = current
-      (ctx: ctx, drawables: _cetz-apply-transform(ctx.transform,
-        _cetz-drawable-path(((origin, false, joined),)),
-      ))
-    },)
+    (_cetz-carrier.with(subpaths),)
   }
   (_cetz-merge-path(body, ..style).first())(ctx)
 }
