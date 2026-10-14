@@ -1,10 +1,9 @@
 #import "../src/lib.typ" as kurvst
-#import "@preview/cetz:0.5.1" as cetz
+#import "@preview/cetz:0.5.2" as cetz
 
 #set page(width: auto, height: auto, margin: 10mm, fill: none)
 
-// The GammaLoop logo (page 1) and its construction (page 2). The website marks
-// in docs/assets/typst/marks import `logo` and `construction` from this file.
+// The GammaLoop logo (page 1) and its construction (page 2).
 
 // Letter stroke width and the gap cut on each side of an over-crossing stroke,
 // in canvas units.
